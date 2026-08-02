@@ -1,10 +1,13 @@
+const MIN_ZOOM_LEVEL_FOR_HISTORY = 6; // kakao level: 작을수록 확대. 이보다 축소되면 개별 마커 대신 안내문구
+const MAX_HISTORY_MARKERS_PER_RENDER = 4000;
+
 const RiskMap = {
   kakaoMap: null,
   clusterer: null,
   infowindow: null,
   kakaoReady: false,
   mapBuilt: false,
-  historyData: [],
+  historyData: [], // [lat, lng, status(1=완료,0=미처리)]
   historyLoaded: false,
   historyMarkers: [],
   reportMarkers: [],
@@ -14,7 +17,8 @@ const RiskMap = {
     group: "전체",
     tiers: { high: true, mid: true, low: true, done: true },
     alerts: false,
-    historyVisible: true
+    historyDone: true,
+    historyPending: true
   },
 
   init() {
@@ -72,13 +76,21 @@ const RiskMap = {
     });
     bar.appendChild(alertChip);
 
-    const historyChip = this.makeChip("기존 출동이력", () => {
-      this.filters.historyVisible = !this.filters.historyVisible;
-      historyChip.classList.toggle("on", this.filters.historyVisible);
+    const doneChip = this.makeChip("구조활동 완료", () => {
+      this.filters.historyDone = !this.filters.historyDone;
+      doneChip.classList.toggle("on", this.filters.historyDone);
       this.renderHistoryInBounds();
     });
-    historyChip.classList.add("on");
-    bar.appendChild(historyChip);
+    doneChip.classList.add("on");
+    bar.appendChild(doneChip);
+
+    const pendingChip = this.makeChip("신고만(미처리)", () => {
+      this.filters.historyPending = !this.filters.historyPending;
+      pendingChip.classList.toggle("on", this.filters.historyPending);
+      this.renderHistoryInBounds();
+    });
+    pendingChip.classList.add("on");
+    bar.appendChild(pendingChip);
   },
 
   makeChip(text, onClick) {
@@ -103,7 +115,7 @@ const RiskMap = {
   },
 
   prefetchHistory() {
-    fetch("./lifesafety_points.json")
+    fetch("./data/busan_reports.json")
       .then((r) => r.json())
       .then((data) => {
         this.historyData = data;
@@ -142,14 +154,28 @@ const RiskMap = {
     if (!this.kakaoMap || !this.historyLoaded) return;
 
     const token = ++this.renderToken;
-    const bounds = this.kakaoMap.getBounds();
-    const visible = this.filters.historyVisible
-      ? this.historyData.filter((p) => bounds.contain(new kakao.maps.LatLng(p.lat, p.lng)))
-      : [];
-
     this.clusterer.clear();
     this.historyMarkers.forEach((m) => m.setMap(null));
     this.historyMarkers = [];
+
+    const level = this.kakaoMap.getLevel();
+    if (level > MIN_ZOOM_LEVEL_FOR_HISTORY) {
+      this.tooZoomedOut = true;
+      this.updateStatus();
+      this.hideSpinner();
+      return;
+    }
+    this.tooZoomedOut = false;
+
+    const bounds = this.kakaoMap.getBounds();
+    const visibleAll = this.historyData.filter((p) => {
+      const status = p[2];
+      if (status === 1 && !this.filters.historyDone) return false;
+      if (status === 0 && !this.filters.historyPending) return false;
+      return bounds.contain(new kakao.maps.LatLng(p[0], p[1]));
+    });
+    this.truncated = visibleAll.length > MAX_HISTORY_MARKERS_PER_RENDER;
+    const visible = visibleAll.slice(0, MAX_HISTORY_MARKERS_PER_RENDER);
 
     const chunkSize = 300;
     let i = 0;
@@ -171,18 +197,21 @@ const RiskMap = {
 
     if (visible.length === 0) {
       this.hideSpinner();
+      this.updateStatus();
     } else {
       requestAnimationFrame(step);
     }
   },
 
   buildHistoryMarker(p) {
+    const isDone = p[2] === 1;
+    const image = isDone ? this.starImage() : this.dotImage("#8a97a8", 8);
     const marker = new kakao.maps.Marker({
-      position: new kakao.maps.LatLng(p.lat, p.lng),
-      image: this.dotImage("#b9b4a8", 8)
+      position: new kakao.maps.LatLng(p[0], p[1]),
+      image
     });
     kakao.maps.event.addListener(marker, "click", () => {
-      const content = `<div style="padding:6px 10px;font-size:11.5px;">기존 출동이력 · ${p.src}${p.type ? " · " + p.type : ""}<br/>${p.date || ""} ${p.sgg || ""}</div>`;
+      const content = `<div style="padding:6px 10px;font-size:11.5px;">${isDone ? "구조활동 완료(매칭됨)" : "신고 접수만 있음(미처리)"}</div>`;
       this.infowindow.setContent(content);
       this.infowindow.open(this.kakaoMap, marker);
     });
@@ -248,9 +277,13 @@ const RiskMap = {
       el.textContent = "데이터 불러오는 중...";
       return;
     }
-    el.textContent =
-      "기존 출동이력 " + this.historyMarkers.length + "/" + this.historyData.length +
-      "건(현재 화면) + 제보 " + Store.reports.length + "건";
+    if (this.tooZoomedOut) {
+      el.textContent = `부산 전체 신고 ${this.historyData.length.toLocaleString()}건 (완료 ${this.historyData.filter(p=>p[2]===1).length.toLocaleString()} / 미처리 ${this.historyData.filter(p=>p[2]===0).length.toLocaleString()}) — 확대하면 지점이 표시됩니다`;
+      return;
+    }
+    let text = `현재 화면 ${this.historyMarkers.length.toLocaleString()}건 표시 중 + 제보 ${Store.reports.length}건`;
+    if (this.truncated) text += ` (밀집 지역이라 최대 ${MAX_HISTORY_MARKERS_PER_RENDER.toLocaleString()}건만 표시, 확대해서 더 보세요)`;
+    el.textContent = text;
   },
 
   hideSpinner() {
