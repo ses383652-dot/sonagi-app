@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>소나기 — 소방 안전 나의 일기</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div id="phone">
+  <header>
+    <h1 id="headerTitle">커뮤니티</h1>
+    <button id="fireBtn">🚒 소방청</button>
+  </header>
+
+  <main>
+    <!-- 화면 ① 커뮤니티 -->
+    <section id="screen-community" class="screen active">
+      <div id="communityFeed"></div>
+      <button id="writeFab">✎</button>
+      <div id="writeOverlay" class="modalOverlay">
+        <div class="modalSheet">
+          <h2>글쓰기</h2>
+          <textarea id="writeText" placeholder="동네 이웃과 나눌 이야기를 자유롭게 적어주세요."></textarea>
+          <div class="modalActions">
+            <button class="btn" id="writeCancel">취소</button>
+            <button class="btn primary" id="writeSubmit">게시</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 화면 ② ＋ 촬영(제보) -->
+    <section id="screen-report" class="screen">
+      <div id="captureStep" class="capture">
+        <button id="reportBack" class="backBtn">‹</button>
+        <div class="viewfinder">위험 요소를 화면 중앙에 맞춰 촬영하거나<br/>갤러리에서 사진을 선택하세요</div>
+        <div class="captureBar">
+          <button id="galleryBtn" class="iconBtn">🖼️</button>
+          <button id="shutterBtn" class="shutterBtn"></button>
+        </div>
+      </div>
+      <input type="file" id="galleryInput" accept="image/*" style="display:none" />
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none" />
+
+      <div id="categoryStep" class="categoryScreen" style="display:none">
+        <button id="categoryBack" class="backBtn" style="position:static;color:#333;margin-bottom:8px;">‹ 다시 촬영</button>
+        <img id="photoPreviewSmall" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-bottom:14px;" />
+        <h2>어떤 위험인가요? (카테고리 선택)</h2>
+        <div id="categoryList"></div>
+        <div class="postBar">
+          <button id="postBtn" class="btn primary" style="width:100%;">게시</button>
+        </div>
+      </div>
+
+      <div id="reportResultOverlay" class="modalOverlay">
+        <div class="modalSheet">
+          <h2>긴급도 판정: <span id="resultTier"></span></h2>
+          <p id="resultMessage" style="font-size:13px;line-height:1.7;white-space:pre-wrap;"></p>
+          <div class="modalActions">
+            <button class="btn primary" id="resultConfirm" style="width:100%;">지도에서 확인</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 화면 ③ 지역위험지도 -->
+    <section id="screen-map" class="screen">
+      <div id="mapFilterBar" class="filterBar"></div>
+      <div style="position:relative;flex:1;">
+        <div class="legendBox">
+          <span class="dot" style="background:#e74c3c"></span>고긴급<br/>
+          <span class="dot" style="background:#f39c12"></span>중간<br/>
+          <span style="color:#1f8a52">★</span> 처리완료
+        </div>
+        <div id="map" style="width:100%;height:100%;"></div>
+        <div id="mapStatus">데이터 불러오는 중...</div>
+      </div>
+    </section>
+  </main>
+
+  <nav id="bottomNav">
+    <button class="navItem" data-screen="community">
+      <span class="navIcon">🏠</span>커뮤니티(메인)
+    </button>
+    <button class="navItem center" data-screen="report">
+      <span class="navIcon">＋</span>
+    </button>
+    <button class="navItem" data-screen="map">
+      <span class="navIcon">🗺️</span>지역위험지도
+    </button>
+  </nav>
+</div>
+
+<script src="js/state.js"></script>
+<script src="js/community.js"></script>
+<script src="js/report.js"></script>
+<script src="js/map.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
