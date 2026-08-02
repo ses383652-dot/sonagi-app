@@ -6,8 +6,11 @@ const RiskMap = {
   infowindow: null,
   kakaoReady: false,
   mapBuilt: false,
-  donePoints: [], // [lat, lng]
+  donePoints: [], // [lat, lng, catIndex]
   doneLoaded: false,
+  doneCategories: [],
+  doneCategoriesLoaded: false,
+  selectedDoneCategory: null, // null = 전체
   gradientLUT: null,
   reportMarkers: [],
   filters: {
@@ -71,6 +74,27 @@ const RiskMap = {
       alertChip.classList.toggle("on", this.filters.alerts);
     });
     bar.appendChild(alertChip);
+
+    const doneCatSelect = document.createElement("select");
+    doneCatSelect.className = "chip";
+    doneCatSelect.innerHTML = '<option value="">구조활동 유형: 전체</option>';
+    doneCatSelect.addEventListener("change", () => {
+      this.selectedDoneCategory = doneCatSelect.value === "" ? null : Number(doneCatSelect.value);
+      this.renderHeatmap();
+    });
+    bar.appendChild(doneCatSelect);
+    this.doneCatSelectEl = doneCatSelect;
+  },
+
+  populateDoneCategorySelect() {
+    const sel = this.doneCatSelectEl;
+    if (!sel || !this.doneCategoriesLoaded) return;
+    this.doneCategories.forEach((name, i) => {
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
   },
 
   makeChip(text, onClick) {
@@ -102,6 +126,14 @@ const RiskMap = {
         this.doneLoaded = true;
         if (this.kakaoMap) this.renderHeatmap();
         this.updateStatus();
+      });
+
+    fetch("./data/busan_done_categories.json")
+      .then((r) => r.json())
+      .then((data) => {
+        this.doneCategories = data;
+        this.doneCategoriesLoaded = true;
+        this.populateDoneCategorySelect();
       });
   },
 
@@ -174,6 +206,7 @@ const RiskMap = {
 
     for (let i = 0; i < this.donePoints.length; i++) {
       const p = this.donePoints[i];
+      if (this.selectedDoneCategory !== null && p[2] !== this.selectedDoneCategory) continue;
       const latlng = new kakao.maps.LatLng(p[0], p[1]);
       if (!bounds.contain(latlng)) continue;
       const pt = proj.containerPointFromCoords(latlng);
@@ -288,7 +321,13 @@ const RiskMap = {
       el.textContent = "데이터 불러오는 중...";
       return;
     }
-    el.textContent = `구조활동 완료 ${this.donePoints.length.toLocaleString()}건(밀도 히트맵) + 제보 ${Store.reports.length}건`;
+    const catName = this.selectedDoneCategory !== null && this.doneCategories[this.selectedDoneCategory]
+      ? this.doneCategories[this.selectedDoneCategory]
+      : "전체";
+    const total = this.selectedDoneCategory === null
+      ? this.donePoints.length
+      : this.donePoints.filter((p) => p[2] === this.selectedDoneCategory).length;
+    el.textContent = `구조활동 완료(${catName}) ${total.toLocaleString()}건(밀도 히트맵) + 제보 ${Store.reports.length}건`;
   },
 
   hideSpinner() {
