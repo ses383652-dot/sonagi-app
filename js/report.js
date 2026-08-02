@@ -129,6 +129,6 @@ const Report = {
     document.getElementById("reportResultOverlay").classList.remove("active");
     this.resetToCapture();
     App.showScreen("map");
-    Map.render();
+    RiskMap.render();
   }
 };

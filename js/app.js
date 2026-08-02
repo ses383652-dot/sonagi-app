@@ -13,7 +13,7 @@ const App = {
 
     Community.init();
     Report.init();
-    Map.init();
+    RiskMap.init();
 
     this.showScreen("community");
   },
@@ -32,7 +32,7 @@ const App = {
     });
 
     if (name === "map") {
-      setTimeout(() => Map.kakaoMap && kakao.maps.event.trigger(Map.kakaoMap, "resize"), 0);
+      RiskMap.onShow();
     }
   }
 };

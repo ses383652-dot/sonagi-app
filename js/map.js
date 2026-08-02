@@ -1,9 +1,14 @@
-const Map = {
+const RiskMap = {
   kakaoMap: null,
   clusterer: null,
+  infowindow: null,
+  kakaoReady: false,
+  mapBuilt: false,
+  historyData: [],
+  historyLoaded: false,
   historyMarkers: [],
   reportMarkers: [],
-  infowindow: null,
+  renderToken: 0,
   filters: {
     recentOnly: false,
     group: "전체",
@@ -14,18 +19,30 @@ const Map = {
 
   init() {
     this.buildFilterBar();
-    this.loadKakao();
+    this.loadKakaoScript();
+    this.prefetchHistory();
+    window.addEventListener("resize", () => {
+      if (App.current === "map") this.onShow();
+    });
+  },
+
+  onShow() {
+    this.tryBuildMap();
+    if (this.kakaoMap) {
+      this.kakaoMap.relayout();
+      this.renderHistoryInBounds();
+      this.render();
+    }
   },
 
   buildFilterBar() {
     const bar = document.getElementById("mapFilterBar");
-    const dateChip = this.makeChip("날짜: 최근1주일", () => {
+    const dateChip = this.makeChip("날짜: 전체", () => {
       this.filters.recentOnly = !this.filters.recentOnly;
       dateChip.textContent = this.filters.recentOnly ? "날짜: 최근1주일" : "날짜: 전체";
       dateChip.classList.toggle("on", this.filters.recentOnly);
       this.render();
     });
-    dateChip.textContent = "날짜: 전체";
     bar.appendChild(dateChip);
 
     const groupSelect = document.createElement("select");
@@ -58,7 +75,7 @@ const Map = {
     const historyChip = this.makeChip("기존 출동이력", () => {
       this.filters.historyVisible = !this.filters.historyVisible;
       historyChip.classList.toggle("on", this.filters.historyVisible);
-      this.historyMarkers.forEach((m) => m.setMap(this.filters.historyVisible ? this.kakaoMap : null));
+      this.renderHistoryInBounds();
     });
     historyChip.classList.add("on");
     bar.appendChild(historyChip);
@@ -72,49 +89,104 @@ const Map = {
     return chip;
   },
 
-  loadKakao() {
+  loadKakaoScript() {
     const APP_KEY = "e36a91c3b660cbbdbc3545f24389d0d3";
     const script = document.createElement("script");
     script.src = "https://dapi.kakao.com/v2/maps/sdk.js?appkey=" + APP_KEY + "&libraries=clusterer&autoload=false";
     script.onload = () => {
       kakao.maps.load(() => {
-        this.kakaoMap = new kakao.maps.Map(document.getElementById("map"), {
-          center: new kakao.maps.LatLng(35.1796, 129.0756),
-          level: 9
-        });
-        this.clusterer = new kakao.maps.MarkerClusterer({
-          map: this.kakaoMap,
-          averageCenter: true,
-          minLevel: 7,
-          disableClickZoom: false
-        });
-        this.infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
-        this.loadHistory();
-        this.render();
+        this.kakaoReady = true;
+        this.tryBuildMap();
       });
     };
     document.head.appendChild(script);
   },
 
-  loadHistory() {
+  prefetchHistory() {
     fetch("./lifesafety_points.json")
       .then((r) => r.json())
       .then((data) => {
-        this.historyMarkers = data.map((p) => {
-          const marker = new kakao.maps.Marker({
-            position: new kakao.maps.LatLng(p.lat, p.lng),
-            image: this.dotImage("#b9b4a8", 8)
-          });
-          kakao.maps.event.addListener(marker, "click", () => {
-            const content = `<div style="padding:6px 10px;font-size:11.5px;">기존 출동이력 · ${p.src}${p.type ? " · " + p.type : ""}<br/>${p.date || ""} ${p.sgg || ""}</div>`;
-            this.infowindow.setContent(content);
-            this.infowindow.open(this.kakaoMap, marker);
-          });
-          return marker;
-        });
-        this.clusterer.addMarkers(this.historyMarkers);
-        document.getElementById("mapStatus").textContent = "기존 출동이력 " + data.length + "건 + 제보 " + Store.reports.length + "건";
+        this.historyData = data;
+        this.historyLoaded = true;
+        if (this.kakaoMap) this.renderHistoryInBounds();
+        this.updateStatus();
       });
+  },
+
+  tryBuildMap() {
+    if (this.mapBuilt) return;
+    const container = document.getElementById("map");
+    if (!this.kakaoReady || !container || container.offsetHeight === 0) return;
+
+    this.mapBuilt = true;
+    this.kakaoMap = new kakao.maps.Map(container, {
+      center: new kakao.maps.LatLng(35.1796, 129.0756),
+      level: 9
+    });
+    this.clusterer = new kakao.maps.MarkerClusterer({
+      map: this.kakaoMap,
+      averageCenter: true,
+      minLevel: 7,
+      disableClickZoom: false
+    });
+    this.infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
+
+    kakao.maps.event.addListener(this.kakaoMap, "idle", () => this.renderHistoryInBounds());
+
+    this.render();
+    if (this.historyLoaded) this.renderHistoryInBounds();
+    this.updateStatus();
+  },
+
+  renderHistoryInBounds() {
+    if (!this.kakaoMap || !this.historyLoaded) return;
+
+    const token = ++this.renderToken;
+    const bounds = this.kakaoMap.getBounds();
+    const visible = this.filters.historyVisible
+      ? this.historyData.filter((p) => bounds.contain(new kakao.maps.LatLng(p.lat, p.lng)))
+      : [];
+
+    this.clusterer.clear();
+    this.historyMarkers.forEach((m) => m.setMap(null));
+    this.historyMarkers = [];
+
+    const chunkSize = 300;
+    let i = 0;
+
+    const step = () => {
+      if (token !== this.renderToken) return;
+      const slice = visible.slice(i, i + chunkSize);
+      const markers = slice.map((p) => this.buildHistoryMarker(p));
+      this.historyMarkers.push(...markers);
+      this.clusterer.addMarkers(markers);
+      i += chunkSize;
+      this.updateStatus();
+      if (i < visible.length) {
+        requestAnimationFrame(step);
+      } else {
+        this.hideSpinner();
+      }
+    };
+
+    if (visible.length === 0) {
+      this.hideSpinner();
+    } else {
+      requestAnimationFrame(step);
+    }
+  },
+
+  buildHistoryMarker(p) {
+    const marker = new kakao.maps.Marker({
+      position: new kakao.maps.LatLng(p.lat, p.lng),
+      image: this.dotImage("#b9b4a8", 8)
+    });
+    kakao.maps.event.addListener(marker, "click", () => {
+      const content = `<div style="padding:6px 10px;font-size:11.5px;">기존 출동이력 · ${p.src}${p.type ? " · " + p.type : ""}<br/>${p.date || ""} ${p.sgg || ""}</div>`;
+      this.infowindow.setContent(content);
+      this.infowindow.open(this.kakaoMap, marker);
+    });
+    return marker;
   },
 
   dotImage(color, size) {
@@ -166,8 +238,24 @@ const Map = {
       this.reportMarkers.push(marker);
     });
 
-    document.getElementById("mapStatus").textContent =
-      "기존 출동이력 " + this.historyMarkers.length + "건 + 제보 " + Store.reports.length + "건 표시 중";
+    this.updateStatus();
+  },
+
+  updateStatus() {
+    const el = document.getElementById("mapStatus");
+    if (!el) return;
+    if (!this.historyLoaded) {
+      el.textContent = "데이터 불러오는 중...";
+      return;
+    }
+    el.textContent =
+      "기존 출동이력 " + this.historyMarkers.length + "/" + this.historyData.length +
+      "건(현재 화면) + 제보 " + Store.reports.length + "건";
+  },
+
+  hideSpinner() {
+    const el = document.getElementById("mapSpinner");
+    if (el) el.style.display = "none";
   },
 
   openPopup(marker, report) {
