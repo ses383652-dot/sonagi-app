@@ -1,5 +1,5 @@
-const MIN_ZOOM_LEVEL_FOR_HISTORY = 6; // kakao level: 작을수록 확대. 이보다 축소되면 개별 마커 대신 안내문구
-const MAX_HISTORY_MARKERS_PER_RENDER = 4000;
+const MIN_ZOOM_LEVEL_FOR_POINTS = 6; // kakao level: 작을수록 확대. 이보다 축소되면 동별 집계 버블로 전환
+const MAX_POINTS_PER_RENDER = 6000;
 
 const RiskMap = {
   kakaoMap: null,
@@ -7,8 +7,11 @@ const RiskMap = {
   infowindow: null,
   kakaoReady: false,
   mapBuilt: false,
-  historyData: [], // [lat, lng, status(1=완료,0=미처리)]
-  historyLoaded: false,
+  donePoints: [], // [lat, lng]
+  doneLoaded: false,
+  dongCounts: [], // [{gu, dong, lat, lng, count}]
+  dongLoaded: false,
+  dongOverlays: [],
   historyMarkers: [],
   reportMarkers: [],
   renderToken: 0,
@@ -16,15 +19,13 @@ const RiskMap = {
     recentOnly: false,
     group: "전체",
     tiers: { high: true, mid: true, low: true, done: true },
-    alerts: false,
-    historyDone: true,
-    historyPending: true
+    alerts: false
   },
 
   init() {
     this.buildFilterBar();
     this.loadKakaoScript();
-    this.prefetchHistory();
+    this.prefetchData();
     window.addEventListener("resize", () => {
       if (App.current === "map") this.onShow();
     });
@@ -34,7 +35,7 @@ const RiskMap = {
     this.tryBuildMap();
     if (this.kakaoMap) {
       this.kakaoMap.relayout();
-      this.renderHistoryInBounds();
+      this.renderHistoryLayer();
       this.render();
     }
   },
@@ -75,22 +76,6 @@ const RiskMap = {
       alertChip.classList.toggle("on", this.filters.alerts);
     });
     bar.appendChild(alertChip);
-
-    const doneChip = this.makeChip("구조활동 완료", () => {
-      this.filters.historyDone = !this.filters.historyDone;
-      doneChip.classList.toggle("on", this.filters.historyDone);
-      this.renderHistoryInBounds();
-    });
-    doneChip.classList.add("on");
-    bar.appendChild(doneChip);
-
-    const pendingChip = this.makeChip("신고만(미처리)", () => {
-      this.filters.historyPending = !this.filters.historyPending;
-      pendingChip.classList.toggle("on", this.filters.historyPending);
-      this.renderHistoryInBounds();
-    });
-    pendingChip.classList.add("on");
-    bar.appendChild(pendingChip);
   },
 
   makeChip(text, onClick) {
@@ -114,14 +99,22 @@ const RiskMap = {
     document.head.appendChild(script);
   },
 
-  prefetchHistory() {
-    fetch("./data/busan_reports.json")
+  prefetchData() {
+    fetch("./data/busan_done_points.json")
       .then((r) => r.json())
       .then((data) => {
-        this.historyData = data;
-        this.historyLoaded = true;
-        if (this.kakaoMap) this.renderHistoryInBounds();
+        this.donePoints = data;
+        this.doneLoaded = true;
+        if (this.kakaoMap) this.renderHistoryLayer();
         this.updateStatus();
+      });
+
+    fetch("./data/busan_dong_counts.json")
+      .then((r) => r.json())
+      .then((data) => {
+        this.dongCounts = data;
+        this.dongLoaded = true;
+        if (this.kakaoMap) this.renderHistoryLayer();
       });
   },
 
@@ -143,47 +136,92 @@ const RiskMap = {
     });
     this.infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
 
-    kakao.maps.event.addListener(this.kakaoMap, "idle", () => this.renderHistoryInBounds());
+    kakao.maps.event.addListener(this.kakaoMap, "idle", () => this.renderHistoryLayer());
 
     this.render();
-    if (this.historyLoaded) this.renderHistoryInBounds();
+    this.renderHistoryLayer();
     this.updateStatus();
   },
 
-  renderHistoryInBounds() {
-    if (!this.kakaoMap || !this.historyLoaded) return;
+  clearDongOverlays() {
+    this.dongOverlays.forEach((o) => o.setMap(null));
+    this.dongOverlays = [];
+  },
+
+  renderDongBubbles() {
+    this.clusterer.clear();
+    this.historyMarkers.forEach((m) => m.setMap(null));
+    this.historyMarkers = [];
+    this.clearDongOverlays();
+
+    if (!this.dongLoaded) return;
+    const counts = this.dongCounts.map((d) => d.count);
+    const maxCount = Math.max(...counts, 1);
+
+    this.dongCounts.forEach((d) => {
+      const size = Math.round(22 + Math.sqrt(d.count / maxCount) * 34);
+      const el = document.createElement("div");
+      el.style.cssText = `
+        width:${size}px;height:${size}px;border-radius:50%;
+        background:rgba(31,138,82,0.6);border:2px solid #ffffff;
+        display:flex;align-items:center;justify-content:center;
+        color:#fff;font-weight:700;font-size:${size > 34 ? 13 : 11}px;
+        box-shadow:0 1px 4px rgba(0,0,0,.25); cursor:pointer;
+      `;
+      el.textContent = d.count;
+      el.title = d.gu + " " + d.dong + " · 완료 " + d.count + "건";
+      el.addEventListener("click", () => {
+        this.kakaoMap.setLevel(4, { anchor: new kakao.maps.LatLng(d.lat, d.lng) });
+        this.kakaoMap.setCenter(new kakao.maps.LatLng(d.lat, d.lng));
+      });
+      const overlay = new kakao.maps.CustomOverlay({
+        position: new kakao.maps.LatLng(d.lat, d.lng),
+        content: el,
+        yAnchor: 0.5,
+        xAnchor: 0.5,
+        zIndex: 3
+      });
+      overlay.setMap(this.kakaoMap);
+      this.dongOverlays.push(overlay);
+    });
+
+    this.hideSpinner();
+    this.updateStatus();
+  },
+
+  renderHistoryLayer() {
+    if (!this.kakaoMap) return;
+    const level = this.kakaoMap.getLevel();
+
+    if (level > MIN_ZOOM_LEVEL_FOR_POINTS) {
+      this.zoomedOut = true;
+      this.renderDongBubbles();
+      return;
+    }
+    this.zoomedOut = false;
+    this.clearDongOverlays();
+    this.renderPointsInBounds();
+  },
+
+  renderPointsInBounds() {
+    if (!this.kakaoMap || !this.doneLoaded) return;
 
     const token = ++this.renderToken;
     this.clusterer.clear();
     this.historyMarkers.forEach((m) => m.setMap(null));
     this.historyMarkers = [];
 
-    const level = this.kakaoMap.getLevel();
-    if (level > MIN_ZOOM_LEVEL_FOR_HISTORY) {
-      this.tooZoomedOut = true;
-      this.updateStatus();
-      this.hideSpinner();
-      return;
-    }
-    this.tooZoomedOut = false;
-
     const bounds = this.kakaoMap.getBounds();
-    const visibleAll = this.historyData.filter((p) => {
-      const status = p[2];
-      if (status === 1 && !this.filters.historyDone) return false;
-      if (status === 0 && !this.filters.historyPending) return false;
-      return bounds.contain(new kakao.maps.LatLng(p[0], p[1]));
-    });
-    this.truncated = visibleAll.length > MAX_HISTORY_MARKERS_PER_RENDER;
-    const visible = visibleAll.slice(0, MAX_HISTORY_MARKERS_PER_RENDER);
+    const visibleAll = this.donePoints.filter((p) => bounds.contain(new kakao.maps.LatLng(p[0], p[1])));
+    this.truncated = visibleAll.length > MAX_POINTS_PER_RENDER;
+    const visible = visibleAll.slice(0, MAX_POINTS_PER_RENDER);
 
     const chunkSize = 300;
     let i = 0;
-
     const step = () => {
       if (token !== this.renderToken) return;
       const slice = visible.slice(i, i + chunkSize);
-      const markers = slice.map((p) => this.buildHistoryMarker(p));
+      const markers = slice.map((p) => this.buildDoneMarker(p));
       this.historyMarkers.push(...markers);
       this.clusterer.addMarkers(markers);
       i += chunkSize;
@@ -203,16 +241,13 @@ const RiskMap = {
     }
   },
 
-  buildHistoryMarker(p) {
-    const isDone = p[2] === 1;
-    const image = isDone ? this.starImage() : this.dotImage("#8a97a8", 8);
+  buildDoneMarker(p) {
     const marker = new kakao.maps.Marker({
       position: new kakao.maps.LatLng(p[0], p[1]),
-      image
+      image: this.starImage()
     });
     kakao.maps.event.addListener(marker, "click", () => {
-      const content = `<div style="padding:6px 10px;font-size:11.5px;">${isDone ? "구조활동 완료(매칭됨)" : "신고 접수만 있음(미처리)"}</div>`;
-      this.infowindow.setContent(content);
+      this.infowindow.setContent('<div style="padding:6px 10px;font-size:11.5px;">구조활동 완료(매칭됨)</div>');
       this.infowindow.open(this.kakaoMap, marker);
     });
     return marker;
@@ -273,16 +308,16 @@ const RiskMap = {
   updateStatus() {
     const el = document.getElementById("mapStatus");
     if (!el) return;
-    if (!this.historyLoaded) {
+    if (!this.doneLoaded) {
       el.textContent = "데이터 불러오는 중...";
       return;
     }
-    if (this.tooZoomedOut) {
-      el.textContent = `부산 전체 신고 ${this.historyData.length.toLocaleString()}건 (완료 ${this.historyData.filter(p=>p[2]===1).length.toLocaleString()} / 미처리 ${this.historyData.filter(p=>p[2]===0).length.toLocaleString()}) — 확대하면 지점이 표시됩니다`;
+    if (this.zoomedOut) {
+      el.textContent = `부산 전체 구조활동 완료 ${this.donePoints.length.toLocaleString()}건 · 동별 집계로 표시 중 (확대하면 개별 지점)`;
       return;
     }
-    let text = `현재 화면 ${this.historyMarkers.length.toLocaleString()}건 표시 중 + 제보 ${Store.reports.length}건`;
-    if (this.truncated) text += ` (밀집 지역이라 최대 ${MAX_HISTORY_MARKERS_PER_RENDER.toLocaleString()}건만 표시, 확대해서 더 보세요)`;
+    let text = `현재 화면 완료 ${this.historyMarkers.length.toLocaleString()}건 + 제보 ${Store.reports.length}건`;
+    if (this.truncated) text += ` (밀집 지역이라 최대 ${MAX_POINTS_PER_RENDER.toLocaleString()}건만 표시)`;
     el.textContent = text;
   },
 
