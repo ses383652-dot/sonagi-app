@@ -1,6 +1,3 @@
-const MIN_ZOOM_LEVEL_FOR_POINTS = 6; // kakao level: 작을수록 확대. 이보다 축소되면 동별 집계 버블로 전환
-const MAX_POINTS_PER_RENDER = 6000;
-
 const RiskMap = {
   kakaoMap: null,
   clusterer: null,
@@ -9,12 +6,8 @@ const RiskMap = {
   mapBuilt: false,
   donePoints: [], // [lat, lng]
   doneLoaded: false,
-  dongCounts: [], // [{gu, dong, lat, lng, count}]
-  dongLoaded: false,
-  dongOverlays: [],
-  historyMarkers: [],
+  doneMarkersBuilt: false,
   reportMarkers: [],
-  renderToken: 0,
   filters: {
     recentOnly: false,
     group: "전체",
@@ -35,7 +28,6 @@ const RiskMap = {
     this.tryBuildMap();
     if (this.kakaoMap) {
       this.kakaoMap.relayout();
-      this.renderHistoryLayer();
       this.render();
     }
   },
@@ -105,16 +97,8 @@ const RiskMap = {
       .then((data) => {
         this.donePoints = data;
         this.doneLoaded = true;
-        if (this.kakaoMap) this.renderHistoryLayer();
+        this.buildDoneMarkersOnce();
         this.updateStatus();
-      });
-
-    fetch("./data/busan_dong_counts.json")
-      .then((r) => r.json())
-      .then((data) => {
-        this.dongCounts = data;
-        this.dongLoaded = true;
-        if (this.kakaoMap) this.renderHistoryLayer();
       });
   },
 
@@ -131,114 +115,52 @@ const RiskMap = {
     this.clusterer = new kakao.maps.MarkerClusterer({
       map: this.kakaoMap,
       averageCenter: true,
-      minLevel: 7,
-      disableClickZoom: false
+      minLevel: 6,
+      calculator: [10, 30, 100, 300, 1000],
+      styles: this.clustererStyles()
     });
     this.infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
 
-    kakao.maps.event.addListener(this.kakaoMap, "idle", () => this.renderHistoryLayer());
-
     this.render();
-    this.renderHistoryLayer();
+    this.buildDoneMarkersOnce();
     this.updateStatus();
   },
 
-  clearDongOverlays() {
-    this.dongOverlays.forEach((o) => o.setMap(null));
-    this.dongOverlays = [];
+  clustererStyles() {
+    const base = {
+      color: "#fff", fontWeight: "bold", textAlign: "center",
+      borderRadius: "50%", border: "2px solid #fff",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      boxShadow: "0 1px 4px rgba(0,0,0,.3)"
+    };
+    const sizes = [36, 44, 52, 60, 68];
+    return sizes.map((s) => Object.assign({}, base, {
+      width: s + "px", height: s + "px", lineHeight: s + "px",
+      background: "rgba(31,138,82,0.75)", fontSize: (s > 50 ? 14 : 12) + "px"
+    }));
   },
 
-  renderDongBubbles() {
-    this.clusterer.clear();
-    this.historyMarkers.forEach((m) => m.setMap(null));
-    this.historyMarkers = [];
-    this.clearDongOverlays();
+  // 완료 지점은 전체를 한 번만 만들어 클러스터러에 등록 — 이후 확대/축소에 따른
+  // 뭉치기/풀기는 카카오 클러스터러가 알아서 처리한다 (뷰포트별 재생성 없음).
+  buildDoneMarkersOnce() {
+    if (this.doneMarkersBuilt || !this.doneLoaded || !this.clusterer) return;
+    this.doneMarkersBuilt = true;
 
-    if (!this.dongLoaded) return;
-    const counts = this.dongCounts.map((d) => d.count);
-    const maxCount = Math.max(...counts, 1);
-
-    this.dongCounts.forEach((d) => {
-      const size = Math.round(22 + Math.sqrt(d.count / maxCount) * 34);
-      const el = document.createElement("div");
-      el.style.cssText = `
-        width:${size}px;height:${size}px;border-radius:50%;
-        background:rgba(31,138,82,0.6);border:2px solid #ffffff;
-        display:flex;align-items:center;justify-content:center;
-        color:#fff;font-weight:700;font-size:${size > 34 ? 13 : 11}px;
-        box-shadow:0 1px 4px rgba(0,0,0,.25); cursor:pointer;
-      `;
-      el.textContent = d.count;
-      el.title = d.gu + " " + d.dong + " · 완료 " + d.count + "건";
-      el.addEventListener("click", () => {
-        this.kakaoMap.setLevel(4, { anchor: new kakao.maps.LatLng(d.lat, d.lng) });
-        this.kakaoMap.setCenter(new kakao.maps.LatLng(d.lat, d.lng));
-      });
-      const overlay = new kakao.maps.CustomOverlay({
-        position: new kakao.maps.LatLng(d.lat, d.lng),
-        content: el,
-        yAnchor: 0.5,
-        xAnchor: 0.5,
-        zIndex: 3
-      });
-      overlay.setMap(this.kakaoMap);
-      this.dongOverlays.push(overlay);
-    });
-
-    this.hideSpinner();
-    this.updateStatus();
-  },
-
-  renderHistoryLayer() {
-    if (!this.kakaoMap) return;
-    const level = this.kakaoMap.getLevel();
-
-    if (level > MIN_ZOOM_LEVEL_FOR_POINTS) {
-      this.zoomedOut = true;
-      this.renderDongBubbles();
-      return;
-    }
-    this.zoomedOut = false;
-    this.clearDongOverlays();
-    this.renderPointsInBounds();
-  },
-
-  renderPointsInBounds() {
-    if (!this.kakaoMap || !this.doneLoaded) return;
-
-    const token = ++this.renderToken;
-    this.clusterer.clear();
-    this.historyMarkers.forEach((m) => m.setMap(null));
-    this.historyMarkers = [];
-
-    const bounds = this.kakaoMap.getBounds();
-    const visibleAll = this.donePoints.filter((p) => bounds.contain(new kakao.maps.LatLng(p[0], p[1])));
-    this.truncated = visibleAll.length > MAX_POINTS_PER_RENDER;
-    const visible = visibleAll.slice(0, MAX_POINTS_PER_RENDER);
-
-    const chunkSize = 300;
+    const chunkSize = 1000;
     let i = 0;
     const step = () => {
-      if (token !== this.renderToken) return;
-      const slice = visible.slice(i, i + chunkSize);
+      const slice = this.donePoints.slice(i, i + chunkSize);
       const markers = slice.map((p) => this.buildDoneMarker(p));
-      this.historyMarkers.push(...markers);
       this.clusterer.addMarkers(markers);
       i += chunkSize;
-      this.updateStatus();
-      if (i < visible.length) {
+      if (i < this.donePoints.length) {
         requestAnimationFrame(step);
       } else {
         this.hideSpinner();
+        this.updateStatus();
       }
     };
-
-    if (visible.length === 0) {
-      this.hideSpinner();
-      this.updateStatus();
-    } else {
-      requestAnimationFrame(step);
-    }
+    requestAnimationFrame(step);
   },
 
   buildDoneMarker(p) {
@@ -312,13 +234,7 @@ const RiskMap = {
       el.textContent = "데이터 불러오는 중...";
       return;
     }
-    if (this.zoomedOut) {
-      el.textContent = `부산 전체 구조활동 완료 ${this.donePoints.length.toLocaleString()}건 · 동별 집계로 표시 중 (확대하면 개별 지점)`;
-      return;
-    }
-    let text = `현재 화면 완료 ${this.historyMarkers.length.toLocaleString()}건 + 제보 ${Store.reports.length}건`;
-    if (this.truncated) text += ` (밀집 지역이라 최대 ${MAX_POINTS_PER_RENDER.toLocaleString()}건만 표시)`;
-    el.textContent = text;
+    el.textContent = `구조활동 완료 ${this.donePoints.length.toLocaleString()}건 + 제보 ${Store.reports.length}건`;
   },
 
   hideSpinner() {
