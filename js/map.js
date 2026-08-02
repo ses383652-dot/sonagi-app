@@ -1,5 +1,6 @@
 const HEAT_GRID_CELL_PX = 4;   // 밀도 그리드 해상도(작을수록 정밀하지만 느림)
 const HEAT_KERNEL_RADIUS_CELLS = 5; // 커널 반경(그리드 셀 단위)
+const SPATIAL_BUCKET_SIZE_DEG = 0.02; // 공간 인덱스 버킷 크기(약 2km) — 확대 시 후보를 크게 줄여줌
 
 const RiskMap = {
   kakaoMap: null,
@@ -8,6 +9,7 @@ const RiskMap = {
   mapBuilt: false,
   donePoints: [], // [lat, lng, catIndex]
   doneLoaded: false,
+  spatialIndex: null, // Map<"bx_by", number[]> (donePoints 인덱스 목록)
   doneCategories: [],
   doneCategoriesLoaded: false,
   selectedDoneCategory: null, // null = 전체
@@ -123,6 +125,7 @@ const RiskMap = {
       .then((r) => r.json())
       .then((data) => {
         this.donePoints = data;
+        this.buildSpatialIndex();
         this.doneLoaded = true;
         if (this.kakaoMap) this.renderHeatmap();
         this.updateStatus();
@@ -155,6 +158,43 @@ const RiskMap = {
     this.render();
     this.renderHeatmap();
     this.updateStatus();
+  },
+
+  // 공간 인덱싱: 포인트를 위경도 기준 버킷(격자)으로 한 번만 정리해둔다.
+  // 렌더링할 때 27,898개 전부를 훑는 대신, 현재 뷰포트가 걸치는 버킷 몇 개만
+  // 찾아서 그 안의 포인트만 검사하면 되므로 확대할수록(=버킷 수가 적을수록) 훨씬 빨라진다.
+  buildSpatialIndex() {
+    this.spatialIndex = new Map();
+    for (let i = 0; i < this.donePoints.length; i++) {
+      const p = this.donePoints[i];
+      const bx = Math.floor(p[0] / SPATIAL_BUCKET_SIZE_DEG);
+      const by = Math.floor(p[1] / SPATIAL_BUCKET_SIZE_DEG);
+      const key = bx + "_" + by;
+      let arr = this.spatialIndex.get(key);
+      if (!arr) {
+        arr = [];
+        this.spatialIndex.set(key, arr);
+      }
+      arr.push(i);
+    }
+  },
+
+  // 현재 지도 bounds가 걸치는 버킷들만 모아 후보 인덱스 목록을 돌려준다.
+  getCandidateIndices(bounds) {
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    const bx0 = Math.floor(sw.getLat() / SPATIAL_BUCKET_SIZE_DEG);
+    const bx1 = Math.floor(ne.getLat() / SPATIAL_BUCKET_SIZE_DEG);
+    const by0 = Math.floor(sw.getLng() / SPATIAL_BUCKET_SIZE_DEG);
+    const by1 = Math.floor(ne.getLng() / SPATIAL_BUCKET_SIZE_DEG);
+    const result = [];
+    for (let bx = bx0; bx <= bx1; bx++) {
+      for (let by = by0; by <= by1; by++) {
+        const arr = this.spatialIndex.get(bx + "_" + by);
+        if (arr) result.push(...arr);
+      }
+    }
+    return result;
   },
 
   buildGradientLUT() {
@@ -204,8 +244,9 @@ const RiskMap = {
     const sigma2 = (R / 2) * (R / 2) * 2;
     let count = 0;
 
-    for (let i = 0; i < this.donePoints.length; i++) {
-      const p = this.donePoints[i];
+    const candidates = this.getCandidateIndices(bounds);
+    for (let ci = 0; ci < candidates.length; ci++) {
+      const p = this.donePoints[candidates[ci]];
       if (this.selectedDoneCategory !== null && p[2] !== this.selectedDoneCategory) continue;
       const latlng = new kakao.maps.LatLng(p[0], p[1]);
       if (!bounds.contain(latlng)) continue;
