@@ -23,9 +23,7 @@ const App = {
 
   init() {
     Store.load();
-    document.getElementById("fireBtn").addEventListener("click", () => {
-      alert("근처 소방서 연결 (mock)\n☎ 119");
-    });
+    document.getElementById("fireBtn").addEventListener("click", () => this.callFireStation());
 
     document.getElementById("navLeft").addEventListener("click", () => {
       this.showScreen(document.getElementById("navLeft").dataset.screen);
@@ -98,6 +96,12 @@ const App = {
         setTimeout(() => RiskMap.onShow(), TRANSITION_DURATION_MS * 0.5 + 20);
       }
     }
+  },
+
+  callFireStation() {
+    if (!confirm("전화를 거시겠습니까?")) return;
+    if (!confirm("지금 이 통화가, 누군가의 구조 요청을 늦출 수 있습니다.\n신중한 선택 부탁드립니다.")) return;
+    window.location.href = "tel:119";
   },
 
   setNavButton(id, conf) {

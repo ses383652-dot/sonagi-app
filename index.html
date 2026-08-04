@@ -22,12 +22,20 @@
 
     <!-- 화면 ① 커뮤니티 -->
     <section id="screen-community" class="screen active">
+      <div class="sortBar">
+        <select id="sortSelect">
+          <option value="latest">최신순</option>
+          <option value="empathy">공감 많은순</option>
+        </select>
+      </div>
       <div id="communityFeed"></div>
       <button id="writeFab">✎</button>
       <div id="writeOverlay" class="modalOverlay">
         <div class="modalSheet">
           <h2>글쓰기</h2>
           <textarea id="writeText" placeholder="동네 이웃과 나눌 이야기를 자유롭게 적어주세요."></textarea>
+          <button id="tagLocationBtn" class="tagLocationBtn">📍 위치 태그</button>
+          <div id="tagLocationInfo" style="display:none;"></div>
           <div class="modalActions">
             <button class="btn" id="writeCancel">취소</button>
             <button class="btn primary" id="writeSubmit">게시</button>
@@ -73,17 +81,24 @@
     <!-- 화면 ③ 지역위험지도 -->
     <section id="screen-map" class="screen">
       <div id="mapFilterBar" class="filterBar"></div>
+      <div id="mapFilterBar2" class="filterBar filterBar2"></div>
       <div class="mapArea">
         <div class="legendBox">
-          <span class="dot" style="background:#e74c3c"></span>고긴급(제보)<br/>
-          <span class="dot" style="background:#f39c12"></span>중간(제보)<br/>
-          구조활동 완료 밀도<br/>
+          <b>제보 공감 수</b><br/>
+          <span class="dot" style="background:#8a97a8"></span>5개 이하<br/>
+          <span class="dot" style="background:#f39c12"></span>5~10개<br/>
+          <span class="dot" style="background:#e74c3c"></span>10개 이상<br/>
+          <div style="margin-top:6px;">구조활동 완료 밀도</div>
           <span style="display:inline-block;width:70px;height:8px;vertical-align:middle;border-radius:4px;background:linear-gradient(to right, rgba(0,0,255,0), blue, cyan, lime, yellow, red);"></span>
           <div style="display:flex;justify-content:space-between;width:70px;font-size:9px;color:#888;"><span>낮음</span><span>높음</span></div>
         </div>
         <div id="map"></div>
         <canvas id="heatmapCanvas"></canvas>
         <div id="mapSpinner" class="spinner"></div>
+        <div id="tagPickBanner" style="display:none;">
+          지도에서 태그할 지점을 선택하세요
+          <button id="tagPickCancel">취소</button>
+        </div>
         <div id="mapStatus">데이터 불러오는 중...</div>
       </div>
     </section>

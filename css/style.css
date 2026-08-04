@@ -94,8 +94,26 @@ nav#bottomNav{
 .post .name{ font-size:12.5px; font-weight:700; }
 .post .time{ font-size:10.5px; color:var(--sub); }
 .post .body{ font-size:12.5px; line-height:1.6; white-space:pre-wrap; }
-.post .stats{ font-size:11px; color:var(--sub); margin-top:8px; }
+.post .stats{ font-size:11px; color:var(--sub); margin-top:8px; display:flex; align-items:center; gap:12px; }
+.post .stats button{
+  border:none; background:none; padding:0; font-size:11px; cursor:pointer; color:var(--sub);
+}
+.post .stats button.mine{ color:var(--red); font-weight:700; }
+.post .deleteBtn{
+  margin-left:auto; border:none; background:none; color:#bbb; font-size:11px; cursor:pointer;
+}
+.post .tagBadge{
+  display:inline-block; margin-top:6px; font-size:10.5px; color:var(--red);
+  background:#fdeceb; border-radius:6px; padding:3px 7px;
+}
 .disclaimer{ font-size:10.5px; color:#aa3d3d; padding: 4px 2px 12px; }
+
+.sortBar{
+  display:flex; gap:8px; padding: 10px 14px 0; background: var(--bg-feed);
+}
+.sortBar select{
+  border:1px solid var(--line); border-radius:8px; padding:5px 8px; font-size:11.5px; background:#fff;
+}
 
 #writeFab{
   position:absolute; right:20px; bottom:22px;
@@ -118,6 +136,17 @@ nav#bottomNav{
   width:100%; min-height:110px; border:1px solid var(--line); border-radius:8px;
   padding:10px; font-size:13px; font-family:inherit; resize:vertical;
 }
+.tagLocationBtn{
+  margin-top:8px; padding:8px 12px; border-radius:8px; border:1px dashed var(--line);
+  background:#fafafa; color:#555; font-size:12.5px; cursor:pointer;
+}
+.tagLocationBtn.tagged{ border-style:solid; border-color:var(--red); color:var(--red); background:#fdeceb; }
+#tagLocationInfo{
+  margin-top:8px; padding:8px 10px; border-radius:8px; background:#fdeceb;
+  color:var(--red); font-size:12px; display:flex; align-items:center; justify-content:space-between;
+}
+#tagLocationInfo button{ border:none; background:none; color:var(--red); font-size:12px; cursor:pointer; text-decoration:underline; }
+
 .modalActions{ display:flex; gap:8px; margin-top:14px; }
 .btn{
   flex:1; padding:11px; border-radius:8px; border:1px solid var(--line);
@@ -201,11 +230,16 @@ nav#bottomNav{
   .chip{ padding:5px 9px; font-size:10.5px; border-radius:12px; }
 }
 
+.filterBar2{
+  border-top: 1px solid var(--line);
+  background: #faf8f5;
+}
+
 .mapArea{
   position:relative;
   flex: 1 1 auto;
-  height: calc(100vh - var(--header-h) - var(--filter-h) - var(--nav-h));
-  height: calc(100dvh - var(--header-h) - var(--filter-h) - var(--nav-h));
+  height: calc(100vh - var(--header-h) - (var(--filter-h) * 2) - var(--nav-h));
+  height: calc(100dvh - var(--header-h) - (var(--filter-h) * 2) - var(--nav-h));
   overflow:hidden;
 }
 #map{ position:absolute; inset:0; width:100%; height:100%; }
@@ -217,6 +251,16 @@ nav#bottomNav{
   border-radius:8px; padding:8px 10px; font-size:11px; z-index:5; line-height:1.7;
 }
 .legendBox span.dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; }
+
+#tagPickBanner{
+  position:absolute; top:12px; left:50%; transform:translateX(-50%);
+  background:rgba(231,76,60,.95); color:#fff; font-size:12px; padding:8px 14px;
+  border-radius:20px; z-index:7; display:flex; align-items:center; gap:10px; white-space:nowrap;
+}
+#tagPickBanner button{
+  border:none; background:rgba(255,255,255,.25); color:#fff; border-radius:12px;
+  padding:3px 10px; font-size:11px; cursor:pointer;
+}
 
 .spinner{
   position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
