@@ -51,6 +51,72 @@ function effectiveTier(baseTier, empathyCount) {
   return TIER_RANK[empathyTier] > TIER_RANK[baseTier] ? empathyTier : baseTier;
 }
 
+// 사진 전용 저장소 — localStorage는 용량이 작아(보통 5~10MB) 사진을 담기 부적합해서
+// 제외해왔는데, 그러면 새로고침/재방문 시 사진이 사라진다. 브라우저의 IndexedDB는
+// 용량 제한이 훨씬 커서(보통 수백MB~) 사진을 여기 따로 저장해 재방문해도 남게 한다.
+const PhotoStore = {
+  dbPromise: null,
+
+  open() {
+    if (this.dbPromise) return this.dbPromise;
+    this.dbPromise = new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error("indexedDB unsupported"));
+        return;
+      }
+      const req = indexedDB.open("sonagi_photos_db", 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore("photos");
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return this.dbPromise;
+  },
+
+  async save(id, dataUrl) {
+    try {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction("photos", "readwrite");
+        tx.objectStore("photos").put(dataUrl, id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) {
+      console.warn("사진 저장 실패:", e);
+    }
+  },
+
+  async get(id) {
+    try {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction("photos", "readonly");
+        const req = tx.objectStore("photos").get(id);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async delete(id) {
+    try {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction("photos", "readwrite");
+        tx.objectStore("photos").delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+};
+
 const Store = {
   posts: [],
   reports: [],
@@ -89,6 +155,20 @@ const Store = {
     }
 
     this.isHost = localStorage.getItem("sonagi_host") === "1";
+
+    this.hydratePhotos();
+  },
+
+  // 새로고침/재방문 직후에는 reports에 photo가 없으므로(용량 문제로 localStorage에
+  // 안 담아둠) IndexedDB에서 비동기로 불러와 채워 넣는다. 지도 팝업을 열 때도
+  // 한 번 더 확인하므로(openPopup) 이 시점에 실패해도 나중에 다시 시도된다.
+  hydratePhotos() {
+    this.reports.forEach((r) => {
+      if (r.photo) return;
+      PhotoStore.get(r.id).then((url) => {
+        if (url) r.photo = url;
+      });
+    });
   },
 
   savePosts() {
@@ -159,11 +239,13 @@ const Store = {
     report.caseId = report.id;
     this.reports.unshift(report);
     this.saveReports();
+    if (report.photo) PhotoStore.save(report.id, report.photo);
   },
 
   deleteReport(id) {
     this.reports = this.reports.filter((r) => r.id !== id);
     this.saveReports();
+    PhotoStore.delete(id);
   },
 
   getReportById(id) {

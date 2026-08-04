@@ -447,8 +447,8 @@ const RiskMap = {
     const tier = effectiveTier(report.tier, empCount);
 
     const photoHtml = report.photo
-      ? `<img src="${report.photo}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;">`
-      : `<div style="width:64px;height:64px;background:#ddd;border-radius:6px;"></div>`;
+      ? `<img id="popupPhoto" src="${report.photo}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;">`
+      : `<div id="popupPhoto" style="width:64px;height:64px;background:#ddd;border-radius:6px;"></div>`;
 
     const content = document.createElement("div");
     content.style.cssText = "padding:10px 12px;font-size:12px;max-width:220px;position:relative;";
@@ -471,6 +471,23 @@ const RiskMap = {
     `;
     this.infowindow.setContent(content);
     this.infowindow.open(this.kakaoMap, marker);
+
+    // 재방문 직후라 아직 사진이 메모리에 안 올라와 있으면(IndexedDB 로딩 중)
+    // 회색 박스로 잠깐 보여주고, 로딩되는 대로 이 팝업이 여전히 열려있을 때만 교체한다.
+    if (!report.photo) {
+      PhotoStore.get(report.id).then((url) => {
+        if (!url || this.openPopupReport !== report) return;
+        report.photo = url;
+        const img = content.querySelector("#popupPhoto");
+        if (img && img.tagName === "DIV") {
+          const replacement = document.createElement("img");
+          replacement.id = "popupPhoto";
+          replacement.src = url;
+          replacement.style.cssText = "width:64px;height:64px;object-fit:cover;border-radius:6px;";
+          img.replaceWith(replacement);
+        }
+      });
+    }
 
     content.querySelector("#popupClose").addEventListener("click", () => this.closePopup());
 

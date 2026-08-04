@@ -31,14 +31,41 @@ const Report = {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      this.photoDataUrl = reader.result;
-      document.getElementById("captureStep").style.display = "none";
-      document.getElementById("categoryStep").style.display = "block";
-      document.getElementById("photoPreviewSmall").src = this.photoDataUrl;
-      this.selectedCategory = null;
-      this.renderCategories();
+      this.resizeImage(reader.result, 900, 0.82).then((resizedDataUrl) => {
+        this.photoDataUrl = resizedDataUrl;
+        document.getElementById("captureStep").style.display = "none";
+        document.getElementById("categoryStep").style.display = "block";
+        document.getElementById("photoPreviewSmall").src = this.photoDataUrl;
+        this.selectedCategory = null;
+        this.renderCategories();
+      });
     };
     reader.readAsDataURL(file);
+  },
+
+  // 사진을 실제로 저장(IndexedDB)하게 되면서, 원본 그대로(수 MB) 쌓이지 않도록
+  // 긴 변 기준 900px로 줄이고 JPEG로 압축해 용량을 크게 낮춘다.
+  resizeImage(dataUrl, maxSize, quality) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width <= maxSize && height <= maxSize) {
+          resolve(dataUrl);
+          return;
+        }
+        const scale = maxSize / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
   },
 
   renderCategories() {
