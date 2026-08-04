@@ -2,7 +2,7 @@ const Report = {
   photoDataUrl: null,
 
   init() {
-    document.getElementById("reportBack").addEventListener("click", () => App.showScreen("community"));
+    document.getElementById("reportBack").addEventListener("click", () => App.showScreen(App.lastTabScreen));
     document.getElementById("galleryBtn").addEventListener("click", () => document.getElementById("galleryInput").click());
     document.getElementById("shutterBtn").addEventListener("click", () => document.getElementById("cameraInput").click());
     document.getElementById("galleryInput").addEventListener("change", (e) => this.onPhoto(e));

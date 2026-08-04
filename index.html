@@ -15,6 +15,11 @@
   </header>
 
   <main>
+    <!-- 화면 ⓪ 메인화면 -->
+    <section id="screen-main" class="screen">
+      <div id="mainHero" style="background-image:url('assets/main-hero.png');"></div>
+    </section>
+
     <!-- 화면 ① 커뮤니티 -->
     <section id="screen-community" class="screen active">
       <div id="communityFeed"></div>
@@ -85,16 +90,21 @@
   </main>
 
   <nav id="bottomNav">
-    <button class="navItem" data-screen="community">
-      <span class="navIcon">🏠</span>커뮤니티(메인)
+    <button class="navItem" id="navLeft">
+      <span class="navIcon"></span><span class="navLabel"></span>
     </button>
-    <button class="navItem center" data-screen="report">
+    <button class="navItem center" id="navCenter">
       <span class="navIcon">＋</span>
     </button>
-    <button class="navItem" data-screen="map">
-      <span class="navIcon">🗺️</span>지역위험지도
+    <button class="navItem" id="navRight">
+      <span class="navIcon"></span><span class="navLabel"></span>
     </button>
   </nav>
+
+  <div id="transitionLayer" aria-hidden="true">
+    <div class="rainBand"></div>
+    <div class="rainStreaks"></div>
+  </div>
 </div>
 
 <script src="js/state.js"></script>

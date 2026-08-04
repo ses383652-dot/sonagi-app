@@ -67,6 +67,7 @@ nav#bottomNav{
   gap:2px; color: var(--sub); font-size: 11px; font-weight:600;
 }
 .navItem .navIcon{ font-size:18px; }
+.navItem .navLabel{ display:block; }
 .navItem.active{ color: var(--red); }
 .navItem.center .navIcon{
   width:44px; height:44px; border-radius:50%;
@@ -75,6 +76,12 @@ nav#bottomNav{
   font-size:22px; margin-top:-22px; box-shadow: 0 4px 10px rgba(231,76,60,.4);
 }
 .navItem.center.active .navIcon{ box-shadow: 0 0 0 3px #fff, 0 4px 10px rgba(231,76,60,.4); }
+
+/* Main */
+#mainHero{
+  width:100%; height:100%; min-height:100%;
+  background-size:cover; background-position:top center; background-repeat:no-repeat;
+}
 
 /* Community */
 #communityFeed{ padding: 14px 14px 90px; background: var(--bg-feed); min-height:100%; }
@@ -223,4 +230,62 @@ nav#bottomNav{
 
 @media (min-width: 431px){
   body{ padding: 20px 0; }
+}
+
+/* 화면 전환 애니메이션 — 우상단→좌하단 대각선으로 훑는 빗줄기 모티프
+   커버리지 보장 원칙: 훑는 레이어를 뷰포트보다 훨씬 크게(220%) 잡고,
+   내부에 알파가 0으로 빠지는 그라디언트를 두지 않는다(색상만 미세하게 변화) —
+   그래야 레이어가 중앙 부근을 지나는 동안은 "얼마나 정확히 가운데인지"와
+   무관하게 화면 전체가 항상 불투명하게 덮인다. 등장/퇴장의 부드러움은
+   레이어 전체의 opacity 페이드(layerFade)로 별도 처리한다. */
+#transitionLayer{
+  position:absolute; inset:0; z-index:999;
+  overflow:hidden; pointer-events:none; display:none;
+  opacity:0;
+}
+#transitionLayer.playing{ display:block; }
+
+#transitionLayer .rainBand,
+#transitionLayer .rainStreaks{
+  position:absolute;
+  /* 정사각형(vmax 기준)으로 잡아야 -60deg로 회전해도 어느 방향으로든
+     뷰포트 대각선보다 커서 모서리 빈틈 없이 확실히 덮인다 */
+  width:220vmax; height:220vmax;
+  left:50%; top:50%;
+  margin-left:-110vmax; margin-top:-110vmax;
+  transform: translate3d(60%, -60%, 0) rotate(-60deg);
+  will-change: transform;
+}
+#transitionLayer .rainBand{
+  background: linear-gradient(100deg, #b2261a 0%, #e74c3c 45%, #e74c3c 55%, #b2261a 100%);
+}
+#transitionLayer .rainStreaks{
+  background-image: repeating-linear-gradient(0deg,
+    rgba(255,255,255,.55) 0 2px,
+    transparent 2px 30px);
+  mix-blend-mode: screen;
+  opacity: .5;
+}
+
+#transitionLayer.playing{
+  animation: layerFade 360ms cubic-bezier(0.4,0,0.2,1) forwards;
+}
+#transitionLayer.playing .rainBand,
+#transitionLayer.playing .rainStreaks{
+  animation: sweepMove 360ms cubic-bezier(0.4,0,0.2,1) forwards;
+}
+@keyframes layerFade{
+  0%   { opacity: 0; }
+  18%  { opacity: 1; }
+  82%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes sweepMove{
+  0%   { transform: translate3d(60%, -60%, 0) rotate(-60deg); }
+  50%  { transform: translate3d(0, 0, 0) rotate(-60deg); }
+  100% { transform: translate3d(-60%, 60%, 0) rotate(-60deg); }
+}
+
+@media (prefers-reduced-motion: reduce){
+  #transitionLayer{ display:none !important; }
 }
