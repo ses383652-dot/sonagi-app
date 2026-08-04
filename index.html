@@ -48,10 +48,19 @@
     <section id="screen-report" class="screen">
       <div id="captureStep" class="capture">
         <button id="reportBack" class="backBtn">‹</button>
-        <div class="viewfinder">위험 요소를 화면 중앙에 맞춰 촬영하거나<br/>갤러리에서 사진을 선택하세요</div>
+        <div class="viewfinder">
+          <p class="vfLead">위험 요소를 촬영하거나<br/>갤러리에서 사진을 선택해주세요</p>
+          <div class="vfInfo">
+            <h3>긴급도는 이렇게 정해져요</h3>
+            <p>게시 직후엔 <b>저긴급</b>으로 시작하고, 이웃들의 공감이 <b>5개</b>를 넘으면 <b>중간</b>, <b>10개</b>를 넘으면 <b>고긴급</b>으로 자동으로 올라갑니다.</p>
+            <p>고긴급이 되면 <b>소방청에 알림이 전달</b>되는 동시에 지도에도 경고 표시로 공개됩니다.</p>
+          </div>
+        </div>
         <div class="captureBar">
-          <button id="galleryBtn" class="iconBtn">🖼️</button>
-          <button id="shutterBtn" class="shutterBtn"></button>
+          <button id="galleryBtn" class="iconBtn">
+            <span class="iconGlyph">🖼️</span><span class="iconText">갤러리</span>
+          </button>
+          <button id="shutterBtn" class="shutterBtn">촬영</button>
         </div>
       </div>
       <input type="file" id="galleryInput" accept="image/*" style="display:none" />
