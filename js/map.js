@@ -21,6 +21,7 @@ const RiskMap = {
   gradientLUT: null,
   reportMarkers: [],
   openPopupReport: null,
+  openPopupMarker: null,
   tagPickMode: false,
   tagPickCallback: null,
   heatmapVisible: true,
@@ -39,6 +40,24 @@ const RiskMap = {
       if (App.current === "map") this.onShow();
     });
     document.getElementById("locateBtn").addEventListener("click", () => this.locateMe());
+    this.bindDevEmpathyShortcut();
+  },
+
+  // ⚠️ TEMP-DEV-ONLY — 지금은 기기 간 데이터 공유가 안 되니(로컬 전용) 공감이
+  // 실제로 여러 명이 누른 것처럼 늘어나는 걸 테스트하기 위한 임시 단축키.
+  // 열려있는 말풍선 상태에서 키보드 '0'을 누르면 그 제보의 공감이 +3 됨.
+  // Firebase 등으로 실제 공유가 붙으면 이 메서드와 호출부(init 안의 한 줄)를
+  // 반드시 제거할 것 — 실사용 환경에 남아있으면 공감 수 조작이 가능해짐.
+  bindDevEmpathyShortcut() {
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "0" || !this.openPopupReport) return;
+      const caseId = this.openPopupReport.caseId;
+      Store.empathy[caseId] = Store.getEmpathyCount(caseId) + 3;
+      Store.saveEmpathy();
+      Store.syncReportStatusByEmpathy(caseId);
+      this.openPopup(this.openPopupMarker, this.openPopupReport);
+      this.render();
+    });
   },
 
   locateMe() {
@@ -480,10 +499,12 @@ const RiskMap = {
   closePopup() {
     if (this.infowindow) this.infowindow.close();
     this.openPopupReport = null;
+    this.openPopupMarker = null;
   },
 
   openPopup(marker, report) {
     this.openPopupReport = report;
+    this.openPopupMarker = marker;
     const caseId = report.caseId;
     const empCount = Store.getEmpathyCount(caseId);
     const mine = Store.hasEmpathized(caseId);
