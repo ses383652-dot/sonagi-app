@@ -25,6 +25,7 @@ const RiskMap = {
   tagPickCallback: null,
   heatmapVisible: true,
   dateMode: "all",
+  pendingFocus: null, // {lat, lng, level} — 다음 지도 표시 때 이 위치로 바로 이동
   filters: {
     group: "전체",
     buckets: { low: true, mid: true, high: true }
@@ -43,9 +44,26 @@ const RiskMap = {
     this.tryBuildMap();
     if (this.kakaoMap) {
       this.kakaoMap.relayout();
+      this.applyPendingFocus();
       this.renderHeatmap();
       this.render();
     }
+  },
+
+  // 제보 게시 직후 "지도에서 확인"처럼, 특정 위치로 바로 이동시키고 싶을 때 호출.
+  // 지도가 아직 안 만들어졌으면(첫 방문) tryBuildMap()이 초기 중심으로 사용하고,
+  // 이미 만들어져 있으면 즉시 적용한다.
+  focusOn(lat, lng, level) {
+    this.pendingFocus = { lat, lng, level: level || 4 };
+    if (this.kakaoMap) this.applyPendingFocus();
+  },
+
+  applyPendingFocus() {
+    if (!this.pendingFocus || !this.kakaoMap) return;
+    const { lat, lng, level } = this.pendingFocus;
+    this.kakaoMap.setLevel(level);
+    this.kakaoMap.setCenter(new kakao.maps.LatLng(lat, lng));
+    this.pendingFocus = null;
   },
 
   // 화면 상단 필터를 "제보(공감/유형)"와 "기존 매핑데이터(구조활동)" 두 줄로
@@ -182,10 +200,14 @@ const RiskMap = {
     if (!this.kakaoReady || !container || container.offsetHeight === 0) return;
 
     this.mapBuilt = true;
+    const initial = this.pendingFocus;
     this.kakaoMap = new kakao.maps.Map(container, {
-      center: new kakao.maps.LatLng(35.1796, 129.0756),
-      level: 9
+      center: initial
+        ? new kakao.maps.LatLng(initial.lat, initial.lng)
+        : new kakao.maps.LatLng(35.1796, 129.0756),
+      level: initial ? initial.level : 9
     });
+    if (initial) this.pendingFocus = null;
     this.infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
     this.gradientLUT = this.buildGradientLUT();
 

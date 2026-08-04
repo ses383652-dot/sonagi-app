@@ -134,6 +134,7 @@ const Report = {
       status: tier === "high" ? "긴급 알림 전송됨" : "접수됨"
     };
     Store.addReport(report);
+    this.lastSubmittedLoc = { lat: report.lat, lng: report.lng };
 
     postBtn.disabled = false;
     postBtn.textContent = "게시";
@@ -155,6 +156,9 @@ const Report = {
   finish() {
     document.getElementById("reportResultOverlay").classList.remove("active");
     this.resetToCapture();
+    if (this.lastSubmittedLoc) {
+      RiskMap.focusOn(this.lastSubmittedLoc.lat, this.lastSubmittedLoc.lng, 3);
+    }
     App.showScreen("map");
     RiskMap.render();
   }
