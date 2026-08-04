@@ -251,7 +251,10 @@ const RiskMap = {
     this.infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
     this.gradientLUT = this.buildGradientLUT();
 
-    kakao.maps.event.addListener(this.kakaoMap, "idle", () => this.renderHeatmap());
+    kakao.maps.event.addListener(this.kakaoMap, "idle", () => {
+      this.renderHeatmap();
+      this.updateEmptyBubble();
+    });
 
     this.render();
     this.renderHeatmap();
@@ -446,6 +449,7 @@ const RiskMap = {
         position: new kakao.maps.LatLng(report.lat, report.lng),
         image
       });
+      marker._reportId = report.id;
       marker.setMap(this.kakaoMap);
       kakao.maps.event.addListener(marker, "click", () => {
         if (this.tagPickMode) {
@@ -461,6 +465,38 @@ const RiskMap = {
     });
 
     this.updateStatus();
+    this.updateEmptyBubble();
+  },
+
+  // 현재 화면(뷰포트) 안에 보이는 제보가 하나도 없으면 "첫 제보자가 되어주세요" 안내를 띄운다.
+  updateEmptyBubble() {
+    const bubble = document.getElementById("emptyReportBubble");
+    if (!bubble) return;
+    if (!this.kakaoMap) {
+      bubble.style.display = "none";
+      return;
+    }
+    const bounds = this.kakaoMap.getBounds();
+    const visibleCount = this.reportMarkers.filter((m) => bounds.contain(m.getPosition())).length;
+    bubble.style.display = visibleCount === 0 ? "block" : "none";
+  },
+
+  // 커뮤니티 "내 제보"에서 특정 제보를 지도에서 바로 확인할 때 사용.
+  viewReport(reportId) {
+    const report = Store.getReportById(reportId);
+    if (!report) return;
+    App.showScreen("map");
+    this.focusOn(report.lat, report.lng, 3);
+    const tryOpen = (attemptsLeft) => {
+      if (!this.kakaoMap) {
+        if (attemptsLeft > 0) setTimeout(() => tryOpen(attemptsLeft - 1), 200);
+        return;
+      }
+      this.render();
+      const marker = this.reportMarkers.find((m) => m._reportId === reportId);
+      if (marker) this.openPopup(marker, report);
+    };
+    setTimeout(() => tryOpen(10), 450);
   },
 
   // 커뮤니티 글 작성 중 "위치 태그"용 — 지도의 제보 마커를 고르는 모드로 전환한다.
