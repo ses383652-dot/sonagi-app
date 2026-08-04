@@ -38,6 +38,27 @@ const RiskMap = {
     window.addEventListener("resize", () => {
       if (App.current === "map") this.onShow();
     });
+    document.getElementById("locateBtn").addEventListener("click", () => this.locateMe());
+  },
+
+  locateMe() {
+    if (!navigator.geolocation) {
+      alert("이 브라우저에서는 위치 확인을 지원하지 않습니다.");
+      return;
+    }
+    const btn = document.getElementById("locateBtn");
+    btn.classList.add("loading");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        btn.classList.remove("loading");
+        this.focusOn(pos.coords.latitude, pos.coords.longitude, 3);
+      },
+      () => {
+        btn.classList.remove("loading");
+        alert("위치 정보를 가져올 수 없습니다. 위치 접근 권한을 확인해주세요.");
+      },
+      { timeout: 8000, enableHighAccuracy: true }
+    );
   },
 
   onShow() {
