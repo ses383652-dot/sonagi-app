@@ -17,24 +17,12 @@ const CATEGORY_GROUPS = [
   }
 ];
 
-const CATEGORY_TIER = {
-  "옹벽·축대 붕괴위험": "high",
-  "노후 전선·전신주 파손(감전위험)": "high",
-  "가스 누출 의심": "high",
-  "싱크홀·지반침하": "high",
-  "간판·현수막 낙하위험": "mid",
-  "옥상 적재물 낙하위험": "mid",
-  "외벽·구조물 균열": "mid",
-  "맨홀 뚜껑 파손·이탈": "mid",
-  "가로수 쓰러짐 위험": "low",
-  "파손된 계단·난간": "low"
-};
-
 const TIER_LABEL = { high: "고긴급", mid: "중간", low: "저긴급" };
-const TIER_COLOR = { high: "#e74c3c", mid: "#f39c12", low: "#2ecc71" }; // 제보 긴급도 판정 결과화면 전용(지도 마커 색과는 별개)
-const TIER_RANK = { low: 0, mid: 1, high: 2 };
+const TIER_COLOR = { high: "#e74c3c", mid: "#f39c12", low: "#2ecc71" }; // 제보 결과화면·팝업 표시 전용
 
-// 공감 수 기준 3단계 — 지도 범례/마커 색상의 기준(항목 18,19)
+// 공감 수 기준 3단계 — 긴급도와 지도 범례/마커 색상 모두 이 하나의 기준을 쓴다.
+// 카테고리는 더 이상 긴급도에 관여하지 않고, 공감 수가 임계값(5, 10)을
+// 넘을 때마다 긴급도가 한 단계씩 올라간다.
 const EMPATHY_BUCKET_COLOR = { low: "#8a97a8", mid: "#f39c12", high: "#e74c3c" };
 const EMPATHY_BUCKET_LABEL = { low: "5개 이하", mid: "5~10개", high: "10개 이상" };
 
@@ -42,13 +30,6 @@ function empathyBucket(count) {
   if (count >= 10) return "high";
   if (count >= 5) return "mid";
   return "low";
-}
-
-// 공감 수가 높을수록 긴급도가 자동으로 올라가도록 반영(항목 4).
-// 원래 카테고리 기반 긴급도와 공감 기반 긴급도 중 더 높은 쪽을 최종값으로 쓴다.
-function effectiveTier(baseTier, empathyCount) {
-  const empathyTier = empathyBucket(empathyCount);
-  return TIER_RANK[empathyTier] > TIER_RANK[baseTier] ? empathyTier : baseTier;
 }
 
 // 사진 전용 저장소 — localStorage는 용량이 작아(보통 5~10MB) 사진을 담기 부적합해서
@@ -207,7 +188,21 @@ const Store = {
       this.empathy[caseId] = current + 1;
     }
     this.saveEmpathy();
+    this.syncReportStatusByEmpathy(caseId);
     return !already;
+  },
+
+  // 공감 수가 고긴급 구간(10개 이상)을 넘나들 때 제보 상태를 맞춰준다.
+  // 호스트가 이미 "처리완료"로 표시한 건은 공감 변동으로 되돌리지 않는다.
+  syncReportStatusByEmpathy(caseId) {
+    const report = this.reports.find((r) => r.caseId === caseId);
+    if (!report || report.status === "처리완료") return;
+    const bucket = empathyBucket(this.getEmpathyCount(caseId));
+    const newStatus = bucket === "high" ? "긴급 알림 전송됨" : "접수됨";
+    if (report.status !== newStatus) {
+      report.status = newStatus;
+      this.saveReports();
+    }
   },
 
   toggleHost() {

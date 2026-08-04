@@ -487,7 +487,7 @@ const RiskMap = {
     const caseId = report.caseId;
     const empCount = Store.getEmpathyCount(caseId);
     const mine = Store.hasEmpathized(caseId);
-    const tier = effectiveTier(report.tier, empCount);
+    const tier = empathyBucket(empCount);
 
     const photoHtml = report.photo
       ? `<img id="popupPhoto" src="${report.photo}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;">`

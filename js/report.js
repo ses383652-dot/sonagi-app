@@ -121,35 +121,31 @@ const Report = {
 
     const rawLoc = await this.getLocation();
     const loc = this.snapToNearestRoad(rawLoc.lat, rawLoc.lng);
-    const tier = CATEGORY_TIER[this.selectedCategory] || "mid";
 
+    // 긴급도는 더 이상 카테고리로 정하지 않는다 — 공감 수(0부터 시작)로만 정해지며
+    // 공감이 쌓여 임계값(5, 10)을 넘을 때마다 자동으로 한 단계씩 올라간다.
     const report = {
       id: "r" + Date.now(),
       category: this.selectedCategory,
-      tier,
       lat: loc.lat,
       lng: loc.lng,
       photo: this.photoDataUrl,
       time: new Date().toISOString(),
-      status: tier === "high" ? "긴급 알림 전송됨" : "접수됨"
+      status: "접수됨"
     };
     Store.addReport(report);
     this.lastSubmittedLoc = { lat: report.lat, lng: report.lng };
 
     postBtn.disabled = false;
     postBtn.textContent = "게시";
-    this.showResult(tier);
+    this.showResult();
   },
 
-  showResult(tier) {
-    const messages = {
-      high: "🚒 소방청에 즉시 알림이 전송되었습니다.\n동시에 지도에 경고 표시로 공개됩니다.",
-      mid: "접수되어 관계기관에 이관됩니다.\n지도에 공개됩니다.",
-      low: "지도에 공개됩니다.\n아래 자가 대처 안내를 참고해주세요."
-    };
-    document.getElementById("resultMessage").textContent = messages[tier];
-    document.getElementById("resultTier").textContent = TIER_LABEL[tier];
-    document.getElementById("resultTier").style.color = TIER_COLOR[tier];
+  showResult() {
+    document.getElementById("resultMessage").textContent =
+      "지도에 공개됩니다.\n다른 시민들의 공감이 모이면 긴급도가 자동으로 올라가고, 고긴급(공감 10개 이상)이 되면 소방청에 즉시 알림이 전송됩니다.";
+    document.getElementById("resultTier").textContent = TIER_LABEL.low;
+    document.getElementById("resultTier").style.color = TIER_COLOR.low;
     document.getElementById("reportResultOverlay").classList.add("active");
   },
 
