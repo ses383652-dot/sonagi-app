@@ -95,13 +95,17 @@ const Report = {
   getLocation() {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
+        alert("이 브라우저에서는 위치 확인을 지원하지 않아 임시로 부산시청 좌표를 사용합니다.");
         resolve({ lat: 35.1796, lng: 129.0756 });
         return;
       }
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => resolve({ lat: 35.1796, lng: 129.0756 }),
-        { timeout: 5000 }
+        () => {
+          alert("위치 정보를 가져올 수 없어 임시로 부산시청 좌표를 사용합니다. 위치 접근 권한을 확인해주세요.");
+          resolve({ lat: 35.1796, lng: 129.0756 });
+        },
+        { timeout: 8000, enableHighAccuracy: true }
       );
     });
   },
