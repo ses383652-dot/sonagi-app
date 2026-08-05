@@ -31,8 +31,13 @@ const Report = {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      this.resizeImage(reader.result, 900, 0.82).then((resizedDataUrl) => {
-        this.photoDataUrl = resizedDataUrl;
+      this.resizeImage(reader.result, 900, 0.82).then(async (resizedDataUrl) => {
+        const overlay = document.getElementById("faceProcessingOverlay");
+        if (overlay) overlay.style.display = "flex";
+
+        this.photoDataUrl = await FaceBlur.process(resizedDataUrl);
+
+        if (overlay) overlay.style.display = "none";
         document.getElementById("captureStep").style.display = "none";
         document.getElementById("categoryStep").style.display = "block";
         document.getElementById("photoPreviewSmall").src = this.photoDataUrl;

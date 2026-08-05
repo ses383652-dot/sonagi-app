@@ -68,6 +68,10 @@
           </button>
           <button id="shutterBtn" class="shutterBtn">촬영</button>
         </div>
+        <div id="faceProcessingOverlay" class="faceProcessingOverlay" style="display:none;">
+          <div class="spinner"></div>
+          <p>사진 속 얼굴을 확인하는 중...<br/>얼굴이 있으면 자동으로 모자이크 처리됩니다.</p>
+        </div>
       </div>
       <input type="file" id="galleryInput" accept="image/*" style="display:none" />
       <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none" />
@@ -149,6 +153,7 @@
 
 <script src="js/state.js"></script>
 <script src="js/community.js"></script>
+<script src="js/face-blur.js"></script>
 <script src="js/report.js"></script>
 <script src="js/map.js"></script>
 <script src="js/app.js"></script>
