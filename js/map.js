@@ -425,6 +425,9 @@ const RiskMap = {
       if (ageDays > days) return false;
     }
     if (this.filters.group !== "전체" && this.categoryGroup(report.category) !== this.filters.group) return false;
+    // 처리완료 후 3개월이 지나면 지도에서 완전히 내려간다(내 제보 탭 기록은 유지됨).
+    if (isCompletedExpired(report)) return false;
+    if (report.status === "처리완료") return true;
     const bucket = empathyBucket(Store.getEmpathyCount(report.caseId));
     return this.filters.buckets[bucket];
   },
@@ -437,14 +440,31 @@ const RiskMap = {
     return new kakao.maps.MarkerImage(url, new kakao.maps.Size(size, size));
   },
 
+  starImage(color, size) {
+    const cx = size / 2, cy = size / 2;
+    const outerR = size / 2 - 1.5, innerR = outerR * 0.42;
+    let points = "";
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? outerR : innerR;
+      const angle = (Math.PI / 5) * i - Math.PI / 2;
+      points += `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)} `;
+    }
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+      <polygon points="${points.trim()}" fill="${color}" stroke="white" stroke-width="1.2"/>
+    </svg>`;
+    const url = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+    return new kakao.maps.MarkerImage(url, new kakao.maps.Size(size, size));
+  },
+
   render() {
     if (!this.kakaoMap) return;
     this.reportMarkers.forEach((m) => m.setMap(null));
     this.reportMarkers = [];
 
     Store.reports.filter((r) => this.passesFilter(r)).forEach((report) => {
-      const bucket = empathyBucket(Store.getEmpathyCount(report.caseId));
-      const image = this.dotImage(EMPATHY_BUCKET_COLOR[bucket], 16);
+      const image = report.status === "처리완료"
+        ? this.starImage("#2ecc71", 20)
+        : this.dotImage(EMPATHY_BUCKET_COLOR[empathyBucket(Store.getEmpathyCount(report.caseId))], 16);
       const marker = new kakao.maps.Marker({
         position: new kakao.maps.LatLng(report.lat, report.lng),
         image
@@ -608,6 +628,7 @@ const RiskMap = {
     if (doneBtn) {
       doneBtn.addEventListener("click", () => {
         report.status = "처리완료";
+        report.completedAt = Date.now();
         Store.saveReports();
         this.openPopup(marker, report);
         this.render();

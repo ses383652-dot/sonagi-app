@@ -13,12 +13,9 @@ const NAV_MAP = {
   }
 };
 
-const TRANSITION_DURATION_MS = 360;
-
 const App = {
   current: "main",
   lastTabScreen: "main",
-  transitioning: false,
   titles: { main: "메인화면", community: "커뮤니티", report: "＋ 촬영(제보)", map: "지역위험지도" },
 
   init() {
@@ -43,31 +40,8 @@ const App = {
   },
 
   showScreen(name) {
-    if (!name || this.transitioning) return;
-    if (name === this.current) return;
-    this.playTransition(name);
-  },
-
-  playTransition(name) {
-    const layer = document.getElementById("transitionLayer");
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    if (reduceMotion || !layer) {
-      this.applyScreen(name);
-      return;
-    }
-
-    this.transitioning = true;
-    layer.classList.add("playing");
-
-    setTimeout(() => {
-      this.applyScreen(name);
-    }, TRANSITION_DURATION_MS * 0.5);
-
-    setTimeout(() => {
-      layer.classList.remove("playing");
-      this.transitioning = false;
-    }, TRANSITION_DURATION_MS);
+    if (!name || name === this.current) return;
+    this.applyScreen(name);
   },
 
   applyScreen(name) {
@@ -87,14 +61,9 @@ const App = {
     document.getElementById("navCenter").classList.toggle("active", name === "report");
 
     if (name === "map") {
-      // 지도 컨테이너가 화면에 완전히 자리잡은 뒤(전환 애니메이션 종료 후)
+      // 지도 컨테이너가 실제로 화면에 자리잡은(레이아웃이 반영된) 다음 프레임에
       // relayout을 호출해야 좌상단만 렌더링되는 문제가 안 생긴다.
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (reduceMotion) {
-        RiskMap.onShow();
-      } else {
-        setTimeout(() => RiskMap.onShow(), TRANSITION_DURATION_MS * 0.5 + 20);
-      }
+      requestAnimationFrame(() => RiskMap.onShow());
     }
   },
 

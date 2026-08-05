@@ -32,6 +32,13 @@ function empathyBucket(count) {
   return "low";
 }
 
+// 처리완료 표시(초록 별)는 완료 시점부터 3개월(90일)까지만 지도에 남는다.
+const COMPLETED_DISPLAY_MS = 90 * 24 * 60 * 60 * 1000;
+function isCompletedExpired(report) {
+  return report.status === "처리완료" && report.completedAt
+    && (Date.now() - report.completedAt) > COMPLETED_DISPLAY_MS;
+}
+
 // 사진 전용 저장소 — localStorage는 용량이 작아(보통 5~10MB) 사진을 담기 부적합해서
 // 제외해왔는데, 그러면 새로고침/재방문 시 사진이 사라진다. 브라우저의 IndexedDB는
 // 용량 제한이 훨씬 커서(보통 수백MB~) 사진을 여기 따로 저장해 재방문해도 남게 한다.
@@ -121,7 +128,12 @@ const Store = {
 
     // 이전 버전(공감 시스템 도입 전) 데이터 호환 — caseId가 없으면 자기 id로 채워준다.
     this.posts.forEach((p) => { if (!p.caseId) p.caseId = p.id; });
-    this.reports.forEach((r) => { if (!r.caseId) r.caseId = r.id; });
+    this.reports.forEach((r) => {
+      if (!r.caseId) r.caseId = r.id;
+      // completedAt 없이 이미 "처리완료"였던 이전 데이터는 지금 막 완료된 것으로
+      // 간주해 3개월 표시 기간을 새로 부여한다.
+      if (r.status === "처리완료" && !r.completedAt) r.completedAt = Date.now();
+    });
 
     try {
       this.empathy = JSON.parse(localStorage.getItem("sonagi_empathy") || "null") || {};
